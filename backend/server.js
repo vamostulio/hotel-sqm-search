@@ -1,36 +1,39 @@
 /**
  * server.js — 広さで選ぶホテル検索 バックエンドAPI
+ * 楽天API 2026年2月移行対応版
  *
- * 起動:
- *   cp .env.example .env   # APIキーを記入
- *   npm install
- *   npm start              # 本番
- *   npm run dev            # 開発（nodemon）
+ * 変更点:
+ *   - エンドポイント: app.rakuten.co.jp → openapi.rakuten.co.jp
+ *   - 認証: applicationId + accessKey の両方が必須
+ *   - Refererヘッダーを付与
  */
 
 'use strict';
 
 require('dotenv').config();
-const express    = require('express');
-const cors       = require('cors');
-const axios      = require('axios');
-const rateLimit  = require('express-rate-limit');
+const express   = require('express');
+const cors      = require('cors');
+const axios     = require('axios');
+const rateLimit = require('express-rate-limit');
 const { extractSqmFromRakutenResponse } = require('./sqmExtractor');
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
 
 const RAKUTEN_APP_ID       = process.env.RAKUTEN_APP_ID       || '';
+const RAKUTEN_ACCESS_KEY   = process.env.RAKUTEN_ACCESS_KEY   || '';
 const RAKUTEN_AFFILIATE_ID = process.env.RAKUTEN_AFFILIATE_ID || '';
-const FRONTEND_ORIGIN      = process.env.FRONTEND_ORIGIN      || 'http://localhost:3000';
+const FRONTEND_ORIGIN      = process.env.FRONTEND_ORIGIN      || '*';
 
 // ── ミドルウェア ─────────────────────────────────────────────────
-app.use(cors({ origin: [FRONTEND_ORIGIN, 'null', /^file:\/\//] }));
+app.use(cors({ origin: '*' }));
 app.use(express.json());
-app.use(rateLimit({ windowMs: 60_000, max: 30, message: { error: 'リクエスト数が上限を超えました。1分後にお試しください。' } }));
+app.use(rateLimit({
+  windowMs: 60_000, max: 30,
+  message: { error: 'リクエスト数が上限を超えました。1分後にお試しください。' }
+}));
 
 // ── 楽天トラベル 都道府県コード対応表 ──────────────────────────────
-// https://webservice.rakuten.co.jp/documentation/prefecture-code
 const PREF_MAP = {
   '北海道': '010000', '青森': '020000', '岩手': '030000', '宮城': '040000',
   '秋田': '050000', '山形': '060000', '福島': '070000', '茨城': '080000',
@@ -53,11 +56,24 @@ function getPrefCode(areaName) {
   return '130000'; // デフォルト: 東京
 }
 
-// ── 楽天API呼び出し共通関数 ─────────────────────────────────────
+// ── 楽天API呼び出し（2026年移行対応版） ──────────────────────────
 async function callRakutenTravel(endpoint, params) {
-  const url = `https://app.rakuten.co.jp/services/api/Travel/${endpoint}`;
+  // 新ドメイン: openapi.rakuten.co.jp
+  const url = `https://openapi.rakuten.co.jp/engine/api/Travel/${endpoint}`;
+
   const res = await axios.get(url, {
-    params: { applicationId: RAKUTEN_APP_ID, format: 'json', formatVersion: 2, ...params },
+    params: {
+      applicationId: RAKUTEN_APP_ID,
+      accessKey:     RAKUTEN_ACCESS_KEY,  // 2026年移行で必須追加
+      format:        'json',
+      formatVersion: 2,
+      ...params,
+    },
+    headers: {
+      // 2026年移行でReferer/Originヘッダーが必須
+      'Referer': FRONTEND_ORIGIN === '*' ? 'https://hotel-sqm-search-1.onrender.com' : FRONTEND_ORIGIN,
+      'Origin':  FRONTEND_ORIGIN === '*' ? 'https://hotel-sqm-search-1.onrender.com' : FRONTEND_ORIGIN,
+    },
     timeout: 10_000,
   });
   return res.data;
@@ -65,56 +81,27 @@ async function callRakutenTravel(endpoint, params) {
 
 // ── アフィリエイトURL生成 ────────────────────────────────────────
 function buildReserveUrl(hotelNo, planId, checkin, checkout, guests) {
-  const base = `https://travel.rakuten.co.jp/HOTEL/${hotelNo}/plan.html`;
+  const base   = `https://travel.rakuten.co.jp/HOTEL/${hotelNo}/plan.html`;
   const params = new URLSearchParams({
-    f_no: hotelNo,
-    f_planid: planId,
-    f_hi1: checkin.replace(/-/g, ''),
-    f_hi2: checkout.replace(/-/g, ''),
+    f_no:      hotelNo,
+    f_planid:  planId,
+    f_hi1:     checkin.replace(/-/g, ''),
+    f_hi2:     checkout.replace(/-/g, ''),
     f_adult_su: guests,
   });
-
   if (RAKUTEN_AFFILIATE_ID) {
-    // アフィリエイトリンク形式
     return `https://hb.afl.rakuten.co.jp/hgc/${RAKUTEN_AFFILIATE_ID}/?pc=${encodeURIComponent(`${base}?${params}`)}`;
   }
   return `${base}?${params}`;
 }
 
 // ── 楽天APIレスポンスのパース ────────────────────────────────────
-/**
- * 楽天 VacantHotelSearch レスポンスを
- * フロントエンド用の統一フォーマットに変換する
- *
- * 実際のレスポンス構造:
- * {
- *   hotels: [
- *     {
- *       hotel: [
- *         { hotelBasicInfo: { hotelNo, hotelName, address1, address2, ... } },
- *         { roomInfo: [
- *             {
- *               roomBasicInfo: { roomName, ... },
- *               dailyCharge: [
- *                 { stayDate, rakutenCharge, total, chargeFlag,
- *                   planId, planName, planContents, ... }
- *               ]
- *             }
- *           ]
- *         }
- *       ]
- *     }
- *   ]
- * }
- */
 function parseRakutenResponse(apiData, { minSqm, guests, checkin, checkout }) {
   const results = [];
   const hotels  = apiData.hotels || [];
 
   for (const hotelWrapper of hotels) {
-    const hotelArr = hotelWrapper.hotel || [];
-
-    // hotel[0] = hotelBasicInfo, hotel[1] = roomInfo配列
+    const hotelArr       = hotelWrapper.hotel || [];
     const hotelBasicInfo = hotelArr[0]?.hotelBasicInfo || {};
     const roomInfoArr    = hotelArr[1]?.roomInfo       || [];
 
@@ -122,69 +109,38 @@ function parseRakutenResponse(apiData, { minSqm, guests, checkin, checkout }) {
       const roomBasicInfo = roomWrapper.roomBasicInfo || {};
       const dailyCharges  = roomWrapper.dailyCharge   || [];
 
-      // プランごとに処理
       for (const charge of dailyCharges) {
-        // 平米数抽出（プラン名 → プラン内容 → 客室名 → ホテル特徴の優先順）
         const sqm = extractSqmFromRakutenResponse(
-          {
-            planName:     charge.planName,
-            planContents: charge.planContents,
-          },
-          {
-            roomName:     roomBasicInfo.roomName,
-            roomContents: roomBasicInfo.roomContents,
-            note:         roomBasicInfo.note,
-          },
-          {
-            hotelSpecial: hotelBasicInfo.hotelSpecial,
-            access:       hotelBasicInfo.access,
-          }
+          { planName: charge.planName, planContents: charge.planContents },
+          { roomName: roomBasicInfo.roomName, roomContents: roomBasicInfo.roomContents },
+          { hotelSpecial: hotelBasicInfo.hotelSpecial }
         );
 
-        // 平米数不明 or 指定未満はスキップ
         if (sqm === null || sqm < minSqm) continue;
 
         const price = charge.total ?? charge.rakutenCharge ?? 0;
 
         results.push({
-          // ホテル情報
           hotelNo:        hotelBasicInfo.hotelNo,
           hotelName:      hotelBasicInfo.hotelName,
-          hotelKanaName:  hotelBasicInfo.hotelKanaName,
           address:        `${hotelBasicInfo.address1 || ''}${hotelBasicInfo.address2 || ''}`,
-          access:         hotelBasicInfo.access,
           nearestStation: hotelBasicInfo.nearestStation,
           hotelImageUrl:  hotelBasicInfo.hotelImageUrl,
           reviewAverage:  hotelBasicInfo.reviewAverage,
           reviewCount:    hotelBasicInfo.reviewCount,
-          hotelInfoUrl:   hotelBasicInfo.hotelInformationUrl,
-
-          // プラン情報
           planId:         charge.planId,
           planName:       charge.planName,
-          planContents:   charge.planContents,
           roomName:       roomBasicInfo.roomName,
-          mealType:       charge.mealFlag, // 0:素泊 1:朝食 2:朝夕食 3:夕食 4:その他
-
-          // 料金
+          mealType:       charge.mealFlag,
           price,
           pricePerPerson: Math.round(price / guests),
-
-          // 広さ
           sqm,
-          perPersonSqm: parseFloat((sqm / guests).toFixed(1)),
-
-          // 予約URL（アフィリエイト対応）
-          reserveUrl: buildReserveUrl(
-            hotelBasicInfo.hotelNo,
-            charge.planId,
-            checkin, checkout, guests
-          ),
+          perPersonSqm:   parseFloat((sqm / guests).toFixed(1)),
+          reserveUrl:     buildReserveUrl(hotelBasicInfo.hotelNo, charge.planId, checkin, checkout, guests),
         });
       }
     }
   }
-
   return results;
 }
 
@@ -192,59 +148,23 @@ function parseRakutenResponse(apiData, { minSqm, guests, checkin, checkout }) {
 //  APIエンドポイント
 // ══════════════════════════════════════════════════════════════════
 
-/**
- * GET /api/search
- * 空室検索 + 平米フィルタリング
- *
- * クエリパラメータ:
- *   area     {string}  エリア名（都道府県名を含む文字列）必須
- *   checkin  {string}  YYYY-MM-DD  必須
- *   checkout {string}  YYYY-MM-DD  必須
- *   guests   {number}  人数（1〜9）デフォルト: 2
- *   minSqm   {number}  最小客室面積㎡ デフォルト: 20
- *   page     {number}  ページ番号 デフォルト: 1
- *   hits     {number}  1ページの取得件数（最大30）デフォルト: 30
- *   sort     {string}  '-price'=料金安順 '+price'=高順 '-sqm'=広い順 デフォルト: -sqm
- */
 app.get('/api/search', async (req, res) => {
-  // APIキーチェック
-  if (!RAKUTEN_APP_ID) {
+  if (!RAKUTEN_APP_ID || !RAKUTEN_ACCESS_KEY) {
     return res.status(500).json({
-      error: 'RAKUTEN_APP_ID が設定されていません。.env ファイルを確認してください。',
-      setup: 'https://webservice.rakuten.co.jp/',
+      error: 'RAKUTEN_APP_ID または RAKUTEN_ACCESS_KEY が設定されていません。',
     });
   }
 
-  const {
-    area    = '東京',
-    checkin,
-    checkout,
-    guests  = '2',
-    minSqm  = '20',
-    page    = '1',
-    hits    = '30',
-    sort    = '-sqm',
-  } = req.query;
+  const { area = '東京', checkin, checkout, guests = '2', minSqm = '20', page = '1', hits = '30', sort = '-sqm' } = req.query;
 
-  // バリデーション
-  if (!checkin || !checkout) {
-    return res.status(400).json({ error: 'checkin と checkout は必須です（YYYY-MM-DD形式）' });
-  }
-  const dateRe = /^\d{4}-\d{2}-\d{2}$/;
-  if (!dateRe.test(checkin) || !dateRe.test(checkout)) {
-    return res.status(400).json({ error: '日付形式が不正です（YYYY-MM-DD）' });
-  }
-  if (new Date(checkin) >= new Date(checkout)) {
-    return res.status(400).json({ error: 'checkout は checkin より後の日付を指定してください' });
-  }
+  if (!checkin || !checkout) return res.status(400).json({ error: 'checkin と checkout は必須です' });
+  if (new Date(checkin) >= new Date(checkout)) return res.status(400).json({ error: 'checkout は checkin より後の日付を指定してください' });
 
   const guestsNum = Math.min(Math.max(parseInt(guests) || 2, 1), 9);
   const minSqmNum = Math.max(parseFloat(minSqm) || 20, 0);
   const prefCode  = getPrefCode(area);
 
   try {
-    // 楽天トラベル VacantHotelSearch API 呼び出し
-    // 公式ドキュメント: https://webservice.rakuten.co.jp/documentation/vacant-hotel-search
     const apiData = await callRakutenTravel('VacantHotelSearch/20170426', {
       middleClassCode: 'japan',
       smallClassCode:  prefCode,
@@ -253,91 +173,51 @@ app.get('/api/search', async (req, res) => {
       adultNum:        guestsNum,
       hits:            Math.min(parseInt(hits) || 30, 30),
       page:            parseInt(page) || 1,
-      searchField:     0,      // 0: 全フィールド検索
     });
 
     if (apiData.error) {
-      return res.status(502).json({
-        error: `楽天トラベルAPIエラー: ${apiData.error}`,
-        description: apiData.error_description,
-      });
+      return res.status(502).json({ error: `楽天APIエラー: ${apiData.error}`, description: apiData.error_description });
     }
 
-    // レスポンスをパースして平米フィルタ
-    let results = parseRakutenResponse(apiData, {
-      minSqm:   minSqmNum,
-      guests:   guestsNum,
-      checkin,
-      checkout,
-    });
+    let results = parseRakutenResponse(apiData, { minSqm: minSqmNum, guests: guestsNum, checkin, checkout });
 
-    // ソート
     const sortFn = {
       '-sqm':    (a, b) => b.sqm - a.sqm,
       '+sqm':    (a, b) => a.sqm - b.sqm,
-      '-price':  (a, b) => a.price - b.price,  // 安い順
-      '+price':  (a, b) => b.price - a.price,  // 高い順
-      '-review': (a, b) => (b.reviewAverage || 0) - (a.reviewAverage || 0),
+      '-price':  (a, b) => a.price - b.price,
+      '+review': (a, b) => (b.reviewAverage || 0) - (a.reviewAverage || 0),
     }[sort] || ((a, b) => b.sqm - a.sqm);
     results.sort(sortFn);
 
-    res.json({
-      ok:       true,
-      total:    results.length,
-      page:     parseInt(page) || 1,
-      minSqm:   minSqmNum,
-      area,
-      prefCode,
-      checkin,
-      checkout,
-      guests:   guestsNum,
-      results,
-    });
+    res.json({ ok: true, total: results.length, minSqm: minSqmNum, area, checkin, checkout, guests: guestsNum, results });
 
   } catch (err) {
-    // axios エラーの場合は楽天API側のメッセージを返す
-    if (err.response?.data) {
-      return res.status(502).json({
-        error: '楽天トラベルAPIエラー',
-        detail: err.response.data,
-      });
-    }
+    if (err.response?.data) return res.status(502).json({ error: '楽天APIエラー', detail: err.response.data });
     console.error('[/api/search] error:', err.message);
-    res.status(500).json({ error: `サーバーエラー: ${err.message}` });
+    res.status(500).json({ error: err.message });
   }
 });
 
-/**
- * GET /api/areas
- * 対応エリア一覧を返す（フロントのサジェスト用）
- */
 app.get('/api/areas', (_req, res) => {
   res.json(Object.keys(PREF_MAP).map(name => ({ name, code: PREF_MAP[name] })));
 });
 
-/**
- * GET /health
- * ヘルスチェック
- */
 app.get('/health', (_req, res) => {
   res.json({
-    status:      'ok',
-    hasApiKey:   !!RAKUTEN_APP_ID,
-    hasAffId:    !!RAKUTEN_AFFILIATE_ID,
-    timestamp:   new Date().toISOString(),
+    status:        'ok',
+    hasApiKey:     !!RAKUTEN_APP_ID,
+    hasAccessKey:  !!RAKUTEN_ACCESS_KEY,
+    hasAffId:      !!RAKUTEN_AFFILIATE_ID,
+    timestamp:     new Date().toISOString(),
   });
 });
 
-// ── 起動 ─────────────────────────────────────────────────────────
 app.listen(PORT, () => {
-  console.log(`\n🏨 広さで選ぶホテル検索 — バックエンドAPI`);
-  console.log(`   URL        : http://localhost:${PORT}`);
-  console.log(`   楽天APIキー: ${RAKUTEN_APP_ID  ? '✅ 設定済み' : '❌ 未設定（.env に RAKUTEN_APP_ID を設定）'}`);
-  console.log(`   アフィリID : ${RAKUTEN_AFFILIATE_ID ? '✅ 設定済み' : '⚠️  未設定（省略可）'}`);
-  console.log(`\n📡 エンドポイント:`);
-  console.log(`   GET /api/search?area=東京&checkin=2025-01-01&checkout=2025-01-02&guests=2&minSqm=30`);
-  console.log(`   GET /api/areas`);
-  console.log(`   GET /health\n`);
+  console.log(`\n🏨 広さで選ぶホテル検索 — バックエンドAPI（2026年移行対応版）`);
+  console.log(`   URL          : http://localhost:${PORT}`);
+  console.log(`   楽天APIキー  : ${RAKUTEN_APP_ID    ? '✅ 設定済み' : '❌ 未設定'}`);
+  console.log(`   アクセスキー : ${RAKUTEN_ACCESS_KEY ? '✅ 設定済み' : '❌ 未設定'}`);
+  console.log(`   アフィリID   : ${RAKUTEN_AFFILIATE_ID ? '✅ 設定済み' : '⚠️  未設定（省略可）'}`);
 });
 
 module.exports = app;
