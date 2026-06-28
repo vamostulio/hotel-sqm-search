@@ -1,11 +1,6 @@
 /**
  * server.js — 広さで選ぶホテル検索 バックエンドAPI
  * 楽天API 2026年2月移行対応版
- *
- * 変更点:
- *   - エンドポイント: app.rakuten.co.jp → openapi.rakuten.co.jp
- *   - 認証: applicationId + accessKey の両方が必須
- *   - Refererヘッダーを付与
  */
 
 'use strict';
@@ -23,9 +18,8 @@ const PORT = process.env.PORT || 3001;
 const RAKUTEN_APP_ID       = process.env.RAKUTEN_APP_ID       || '';
 const RAKUTEN_ACCESS_KEY   = process.env.RAKUTEN_ACCESS_KEY   || '';
 const RAKUTEN_AFFILIATE_ID = process.env.RAKUTEN_AFFILIATE_ID || '';
-const FRONTEND_ORIGIN      = process.env.FRONTEND_ORIGIN      || '*';
+const FRONTEND_ORIGIN      = process.env.FRONTEND_ORIGIN      || 'https://hotel-sqm-search-1.onrender.com';
 
-// ── ミドルウェア ─────────────────────────────────────────────────
 app.use(cors({ origin: '*' }));
 app.use(express.json());
 app.use(rateLimit({
@@ -33,46 +27,43 @@ app.use(rateLimit({
   message: { error: 'リクエスト数が上限を超えました。1分後にお試しください。' }
 }));
 
-// ── 楽天トラベル 都道府県コード対応表 ──────────────────────────────
+// ── 都道府県コード（楽天API用・英語名） ──────────────────────────
 const PREF_MAP = {
-  '北海道': '010000', '青森': '020000', '岩手': '030000', '宮城': '040000',
-  '秋田': '050000', '山形': '060000', '福島': '070000', '茨城': '080000',
-  '栃木': '090000', '群馬': '100000', '埼玉': '110000', '千葉': '120000',
-  '東京': '130000', '神奈川': '140000', '新潟': '150000', '富山': '160000',
-  '石川': '170000', '福井': '180000', '山梨': '190000', '長野': '200000',
-  '岐阜': '210000', '静岡': '220000', '愛知': '230000', '三重': '240000',
-  '滋賀': '250000', '京都': '260000', '大阪': '270000', '兵庫': '280000',
-  '奈良': '290000', '和歌山': '300000', '鳥取': '310000', '島根': '320000',
-  '岡山': '330000', '広島': '340000', '山口': '350000', '徳島': '360000',
-  '香川': '370000', '愛媛': '380000', '高知': '390000', '福岡': '400000',
-  '佐賀': '410000', '長崎': '420000', '熊本': '430000', '大分': '440000',
-  '宮崎': '450000', '鹿児島': '460000', '沖縄': '470000',
+  '北海道': 'hokkaido', '青森': 'aomori',   '岩手': 'iwate',     '宮城': 'miyagi',
+  '秋田':   'akita',    '山形': 'yamagata', '福島': 'fukushima', '茨城': 'ibaraki',
+  '栃木':   'tochigi',  '群馬': 'gunma',    '埼玉': 'saitama',   '千葉': 'chiba',
+  '東京':   'tokyo',    '神奈川':'kanagawa', '新潟': 'niigata',   '富山': 'toyama',
+  '石川':   'ishikawa', '福井': 'fukui',    '山梨': 'yamanashi', '長野': 'nagano',
+  '岐阜':   'gifu',     '静岡': 'shizuoka', '愛知': 'aichi',     '三重': 'mie',
+  '滋賀':   'shiga',    '京都': 'kyoto',    '大阪': 'osaka',     '兵庫': 'hyogo',
+  '奈良':   'nara',     '和歌山':'wakayama', '鳥取': 'tottori',   '島根': 'shimane',
+  '岡山':   'okayama',  '広島': 'hiroshima','山口': 'yamaguchi', '徳島': 'tokushima',
+  '香川':   'kagawa',   '愛媛': 'ehime',    '高知': 'kochi',     '福岡': 'fukuoka',
+  '佐賀':   'saga',     '長崎': 'nagasaki', '熊本': 'kumamoto',  '大分': 'oita',
+  '宮崎':   'miyazaki', '鹿児島':'kagoshima','沖縄': 'okinawa',
 };
 
 function getPrefCode(areaName) {
   for (const [key, code] of Object.entries(PREF_MAP)) {
     if (areaName.includes(key)) return code;
   }
-  return '130000'; // デフォルト: 東京
+  return 'tokyo'; // デフォルト: 東京
 }
 
 // ── 楽天API呼び出し（2026年移行対応版） ──────────────────────────
 async function callRakutenTravel(endpoint, params) {
-  // 新ドメイン: openapi.rakuten.co.jp
   const url = `https://openapi.rakuten.co.jp/engine/api/Travel/${endpoint}`;
-
   const res = await axios.get(url, {
     params: {
       applicationId: RAKUTEN_APP_ID,
-      accessKey:     RAKUTEN_ACCESS_KEY,  // 2026年移行で必須追加
+      accessKey:     RAKUTEN_ACCESS_KEY,
       format:        'json',
       formatVersion: 2,
       ...params,
     },
     headers: {
-      // 2026年移行でReferer/Originヘッダーが必須
-      'Referer': FRONTEND_ORIGIN === '*' ? 'https://hotel-sqm-search-1.onrender.com' : FRONTEND_ORIGIN,
-      'Origin':  FRONTEND_ORIGIN === '*' ? 'https://hotel-sqm-search-1.onrender.com' : FRONTEND_ORIGIN,
+      'Referer': FRONTEND_ORIGIN,
+      'Origin':  FRONTEND_ORIGIN,
     },
     timeout: 10_000,
   });
@@ -83,10 +74,10 @@ async function callRakutenTravel(endpoint, params) {
 function buildReserveUrl(hotelNo, planId, checkin, checkout, guests) {
   const base   = `https://travel.rakuten.co.jp/HOTEL/${hotelNo}/plan.html`;
   const params = new URLSearchParams({
-    f_no:      hotelNo,
-    f_planid:  planId,
-    f_hi1:     checkin.replace(/-/g, ''),
-    f_hi2:     checkout.replace(/-/g, ''),
+    f_no:       hotelNo,
+    f_planid:   planId,
+    f_hi1:      checkin.replace(/-/g, ''),
+    f_hi2:      checkout.replace(/-/g, ''),
     f_adult_su: guests,
   });
   if (RAKUTEN_AFFILIATE_ID) {
@@ -150,9 +141,7 @@ function parseRakutenResponse(apiData, { minSqm, guests, checkin, checkout }) {
 
 app.get('/api/search', async (req, res) => {
   if (!RAKUTEN_APP_ID || !RAKUTEN_ACCESS_KEY) {
-    return res.status(500).json({
-      error: 'RAKUTEN_APP_ID または RAKUTEN_ACCESS_KEY が設定されていません。',
-    });
+    return res.status(500).json({ error: 'RAKUTEN_APP_ID または RAKUTEN_ACCESS_KEY が未設定です。' });
   }
 
   const { area = '東京', checkin, checkout, guests = '2', minSqm = '20', page = '1', hits = '30', sort = '-sqm' } = req.query;
@@ -166,7 +155,8 @@ app.get('/api/search', async (req, res) => {
 
   try {
     const apiData = await callRakutenTravel('VacantHotelSearch/20170426', {
-      middleClassCode: 'japan',
+      largeClassCode:  'japan',
+      middleClassCode: prefCode,
       smallClassCode:  prefCode,
       checkinDate:     checkin.replace(/-/g, ''),
       checkoutDate:    checkout.replace(/-/g, ''),
@@ -204,11 +194,11 @@ app.get('/api/areas', (_req, res) => {
 
 app.get('/health', (_req, res) => {
   res.json({
-    status:        'ok',
-    hasApiKey:     !!RAKUTEN_APP_ID,
-    hasAccessKey:  !!RAKUTEN_ACCESS_KEY,
-    hasAffId:      !!RAKUTEN_AFFILIATE_ID,
-    timestamp:     new Date().toISOString(),
+    status:       'ok',
+    hasApiKey:    !!RAKUTEN_APP_ID,
+    hasAccessKey: !!RAKUTEN_ACCESS_KEY,
+    hasAffId:     !!RAKUTEN_AFFILIATE_ID,
+    timestamp:    new Date().toISOString(),
   });
 });
 
