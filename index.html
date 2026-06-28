@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>広さで選ぶホテル検索</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --navy:       #0D1B2A;
+      --blue:       #185FA5;
+      --blue-dark:  #0c447c;
+      --blue-mid:   #378ADD;
+      --blue-light: #E6F1FB;
+      --amber:      #EF9F27;
+      --amber-bg:   #FAEEDA;
+      --green-bg:   #EAF3DE;
+      --green-text: #3B6D11;
+      --text:       #1a1a1a;
+      --text-muted: #5f6368;
+      --text-hint:  #9aa0a6;
+      --bg:         #F2F4F7;
+      --card:       #ffffff;
+      --border:     rgba(0,0,0,0.10);
+      --radius-sm:  6px;
+      --radius-md:  10px;
+      --radius-lg:  14px;
+      --shadow-sm:  0 1px 4px rgba(0,0,0,0.06);
+      --shadow-md:  0 3px 12px rgba(0,0,0,0.10);
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont,
+        'Hiragino Kaku Gothic ProN', 'Hiragino Sans', 'Yu Gothic UI', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    /* ─── ヘッダー ─────────────────────────────────── */
+    .site-header {
+      background: var(--navy);
+      color: #fff;
+      padding: 14px 20px 12px;
+      position: sticky; top: 0; z-index: 100;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+    .header-inner {
+      max-width: 960px; margin: 0 auto;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .logo-badge {
+      background: var(--amber); color: var(--navy);
+      font-size: 14px; font-weight: 800;
+      padding: 4px 11px; border-radius: var(--radius-sm);
+      letter-spacing: 0.05em; flex-shrink: 0;
+    }
+    .site-title { font-size: 17px; font-weight: 600; }
+    .site-tagline { font-size: 11px; color: rgba(255,255,255,0.5); margin-top: 1px; }
+
+    /* ─── 検索パネル ────────────────────────────────── */
+    .search-panel {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 20px;
+      box-shadow: var(--shadow-sm);
+    }
+    .search-inner { max-width: 960px; margin: 0 auto; }
+
+    /* フォームグリッド */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 2fr 1.4fr 1.4fr 1fr;
+      gap: 10px; margin-bottom: 14px;
+    }
+    @media (max-width: 680px) {
+      .form-grid { grid-template-columns: 1fr 1fr; }
+    }
+    .form-group { display: flex; flex-direction: column; gap: 4px; }
+    .form-group label { font-size: 11px; font-weight: 600; color: var(--text-muted); letter-spacing: 0.04em; }
+    .form-group input,
+    .form-group select {
+      font-size: 14px; padding: 9px 11px;
+      border: 1.5px solid var(--border); border-radius: var(--radius-md);
+      background: var(--card); color: var(--text);
+      transition: border-color 0.15s;
+      appearance: none; -webkit-appearance: none;
+    }
+    .form-group input:focus,
+    .form-group select:focus {
+      outline: none; border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(24,95,165,0.12);
+    }
+
+    /* 平米スライダーボックス */
+    .sqm-box {
+      background: var(--blue-light);
+      border: 1.5px solid rgba(24,95,165,0.18);
+      border-radius: var(--radius-lg);
+      padding: 14px 18px; margin-bottom: 14px;
+    }
+    .sqm-top {
+      display: flex; justify-content: space-between; align-items: flex-end;
+      margin-bottom: 10px;
+    }
+    .sqm-label { font-size: 12px; font-weight: 600; color: var(--blue); }
+    .sqm-desc  { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+    .sqm-value-block { display: flex; align-items: baseline; gap: 3px; }
+    .sqm-num   { font-size: 38px; font-weight: 800; color: var(--blue); line-height: 1; }
+    .sqm-unit  { font-size: 14px; color: var(--text-muted); }
+    input[type="range"] {
+      width: 100%; height: 5px; cursor: pointer;
+      appearance: none; -webkit-appearance: none;
+      background: linear-gradient(to right, var(--blue) var(--pct, 22%), rgba(24,95,165,0.18) var(--pct, 22%));
+      border-radius: 3px;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      appearance: none; width: 22px; height: 22px;
+      background: var(--blue); border-radius: 50%;
+      border: 3px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+      cursor: grab;
+    }
+    input[type="range"]:active::-webkit-slider-thumb { cursor: grabbing; }
+    .sqm-scale {
+      display: flex; justify-content: space-between;
+      font-size: 10px; color: var(--text-hint); margin-top: 5px;
+    }
+    .pp-preview {
+      display: inline-block; margin-top: 10px;
+      background: #fff; color: var(--blue);
+      font-size: 12px; font-weight: 500;
+      padding: 4px 12px; border-radius: 20px;
+      box-shadow: var(--shadow-sm);
+    }
+
+    /* 検索ボタン */
+    .search-btn {
+      width: 100%; padding: 13px;
+      background: var(--blue); color: #fff;
+      border: none; border-radius: var(--radius-md);
+      font-size: 15px; font-weight: 600; letter-spacing: 0.03em;
+      cursor: pointer; transition: background 0.15s, transform 0.1s;
+    }
+    .search-btn:hover  { background: var(--blue-mid); }
+    .search-btn:active { background: var(--blue-dark); transform: scale(0.99); }
+    .search-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    /* ─── 結果エリア ─────────────────────────────────── */
+    .results-outer { max-width: 960px; margin: 0 auto; padding: 20px; }
+    .results-header {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-bottom: 14px; flex-wrap: wrap; gap: 8px;
+    }
+    .results-count { font-size: 14px; color: var(--text-muted); }
+    .results-count strong { color: var(--text); font-size: 15px; }
+    .sort-select {
+      font-size: 13px; padding: 6px 12px;
+      border: 1px solid var(--border); border-radius: var(--radius-md);
+      background: var(--card); color: var(--text-muted); cursor: pointer;
+    }
+
+    /* ─── ホテルカード ──────────────────────────────── */
+    .hotel-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 16px 18px; margin-bottom: 12px;
+      box-shadow: var(--shadow-sm);
+      transition: box-shadow 0.15s, transform 0.1s;
+    }
+    .hotel-card:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateY(-1px);
+    }
+    .card-top {
+      display: flex; justify-content: space-between;
+      align-items: flex-start; gap: 12px; margin-bottom: 10px;
+    }
+    .hotel-info { flex: 1; min-width: 0; }
+    .hotel-name {
+      font-size: 16px; font-weight: 700; color: var(--text);
+      margin-bottom: 3px; line-height: 1.3;
+    }
+    .hotel-sub {
+      display: flex; align-items: center; gap: 8px;
+      flex-wrap: wrap; margin-bottom: 4px;
+    }
+    .hotel-area { font-size: 12px; color: var(--text-muted); }
+    .hotel-review {
+      font-size: 12px; color: var(--text-muted);
+      display: flex; align-items: center; gap: 3px;
+    }
+    .star { color: var(--amber); }
+
+    /* 平米コールアウト */
+    .sqm-callout { text-align: right; flex-shrink: 0; }
+    .sqm-big {
+      font-size: 34px; font-weight: 800; color: var(--blue);
+      line-height: 1; letter-spacing: -0.02em;
+    }
+    .sqm-big-unit { font-size: 14px; color: var(--text-muted); font-weight: 400; }
+    .pp-badge {
+      display: inline-block; margin-top: 4px;
+      background: var(--blue-light); color: var(--blue);
+      font-size: 11px; font-weight: 600;
+      padding: 2px 9px; border-radius: 20px;
+    }
+
+    /* プラン・タグ */
+    .plan-name {
+      font-size: 13px; color: var(--text-muted);
+      margin-bottom: 10px; line-height: 1.5;
+    }
+    .meal-badge {
+      display: inline-block; font-size: 11px;
+      padding: 1px 7px; border-radius: 8px; margin-bottom: 8px;
+      font-weight: 500;
+    }
+    .meal-0 { background: #f0f0f0; color: #666; }
+    .meal-1 { background: #EAF3DE; color: #3B6D11; }
+    .meal-2 { background: #E6F1FB; color: var(--blue); }
+    .meal-3 { background: #FDE8D8; color: #9c4a00; }
+
+    .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+    .tag {
+      font-size: 11px; background: var(--bg); color: var(--text-muted);
+      border: 1px solid var(--border); padding: 2px 9px; border-radius: 20px;
+    }
+
+    /* フッター（価格・予約ボタン） */
+    .card-footer {
+      display: flex; justify-content: space-between; align-items: center;
+      border-top: 1px solid var(--border); padding-top: 12px;
+    }
+    .price-block { display: flex; flex-direction: column; }
+    .price-label { font-size: 10px; color: var(--text-hint); letter-spacing: 0.03em; }
+    .price-val { font-size: 22px; font-weight: 800; color: var(--text); }
+    .price-suffix { font-size: 11px; color: var(--text-muted); font-weight: 400; }
+    .price-per { font-size: 11px; color: var(--text-muted); }
+    .reserve-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--blue); color: #fff;
+      text-decoration: none; padding: 10px 20px;
+      border-radius: var(--radius-md);
+      font-size: 14px; font-weight: 600;
+      transition: background 0.15s; white-space: nowrap;
+    }
+    .reserve-btn:hover { background: var(--blue-mid); }
+
+    /* ─── 状態表示 ──────────────────────────────────── */
+    .state-box {
+      text-align: center; padding: 50px 20px;
+      color: var(--text-muted); font-size: 15px;
+    }
+    .state-icon { font-size: 44px; margin-bottom: 12px; opacity: 0.35; }
+    .state-sub  { font-size: 13px; color: var(--text-hint); margin-top: 6px; }
+    .spinner {
+      width: 36px; height: 36px; margin: 0 auto 14px;
+      border: 3px solid var(--border);
+      border-top-color: var(--blue);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── 通知バナー ────────────────────────────────── */
+    .notice {
+      border-radius: var(--radius-md);
+      padding: 10px 14px; margin-bottom: 14px;
+      font-size: 12px;
+    }
+    .notice-warn  { background: var(--amber-bg); border: 1px solid rgba(239,159,39,0.4); color: #633806; }
+    .notice-error { background: #FDE8E8; border: 1px solid rgba(200,0,0,0.2); color: #8b0000; }
+    .notice a { color: var(--blue); }
+
+    /* ─── ソースバッジ ──────────────────────────────── */
+    .src-badge {
+      font-size: 10px; padding: 1px 6px; border-radius: 8px;
+      vertical-align: middle; margin-left: 4px;
+    }
+    .src-live   { background: var(--green-bg); color: var(--green-text); border: 1px solid #b7d98a; }
+    .src-sample { background: var(--amber-bg); color: #8a5700; border: 1px solid #f5c87a; }
+  </style>
+</head>
+<body>
+
+<!-- ── サイトヘッダー ───────────────────────── -->
+<header class="site-header">
+  <div class="header-inner">
+    <span class="logo-badge">㎡</span>
+    <div>
+      <div class="site-title">広さで選ぶホテル検索</div>
+      <div class="site-tagline">客室の広さ（平米数）を第一条件に宿泊先を比較</div>
+    </div>
+  </div>
+</header>
+
+<!-- ── 検索パネル ───────────────────────────── -->
+<section class="search-panel">
+  <div class="search-inner">
+
+    <div id="setup-notice" class="notice notice-warn" style="display:none">
+      ⚠️ <strong>デモモード</strong>：バックエンドに接続できないため、サンプルデータで表示しています。
+      <a href="https://webservice.rakuten.co.jp/" target="_blank" rel="noopener">楽天ウェブサービス</a>でAPIキーを取得後、
+      バックエンド（<code>npm start</code>）を起動してください。
+    </div>
+
+    <div class="form-grid">
+      <div class="form-group">
+        <label for="area">エリア・都市名</label>
+        <input id="area" type="text" placeholder="例：東京、大阪、京都" value="東京" list="area-list" autocomplete="off" />
+        <datalist id="area-list"></datalist>
+      </div>
+      <div class="form-group">
+        <label for="checkin">チェックイン</label>
+        <input id="checkin" type="date" />
+      </div>
+      <div class="form-group">
+        <label for="checkout">チェックアウト</label>
+        <input id="checkout" type="date" />
+      </div>
+      <div class="form-group">
+        <label for="guests">宿泊人数</label>
+        <select id="guests">
+          <option value="1">1名</option>
+          <option value="2" selected>2名</option>
+          <option value="3">3名</option>
+          <option value="4">4名</option>
+          <option value="5">5名</option>
+          <option value="6">6名</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="sqm-box">
+      <div class="sqm-top">
+        <div>
+          <div class="sqm-label">最小客室面積（㎡）</div>
+          <div class="sqm-desc">この広さ以上の客室のみを表示します</div>
+        </div>
+        <div class="sqm-value-block">
+          <span class="sqm-num" id="sqm-display">30</span>
+          <span class="sqm-unit">㎡ 以上</span>
+        </div>
+      </div>
+      <input type="range" id="sqm-slider" min="10" max="100" step="1" value="30" />
+      <div class="sqm-scale">
+        <span>10㎡（コンパクト）</span>
+        <span>30㎡（快適）</span>
+        <span>60㎡（広め）</span>
+        <span>100㎡（スイート）</span>
+      </div>
+      <div class="pp-preview" id="pp-preview">2名で利用 → 1人あたり 15.0㎡</div>
+    </div>
+
+    <button class="search-btn" id="search-btn" onclick="doSearch()">
+      🔍　この条件でホテルを検索する
+    </button>
+  </div>
+</section>
+
+<!-- ── 結果エリア ───────────────────────────── -->
+<div class="results-outer">
+  <div id="results">
+    <div class="state-box">
+      <div class="state-icon">🏨</div>
+      <div>条件を設定して検索してください</div>
+      <div class="state-sub">客室面積が明記されているプランのみ表示されます</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════
+//  設定
+// ═══════════════════════════════════════════════════
+const API_BASE = 'https://hotel-sqm-search.onrender.com';  // バックエンドURL
+
+// ─── 平米数抽出（フロントエンド版、バックエンドと同等ロジック） ───
+const SQM_PATTERNS = [
+  /(\d+(?:\.\d+)?)\s*[〜~～]\s*\d+(?:\.\d+)?\s*(?:㎡|m²|平米|平方メートル)/i,
+  /(\d+(?:\.\d+)?)\s*(?:㎡|m²|平米|平方メートル)/i,
+  /(\d+(?:\.\d+)?)\s*(?:sq\.?\s*m|sqm)/i,
+  /(?:広さ|面積|客室|部屋)\s*[:：]?\s*約?\s*(\d+(?:\.\d+)?)\s*(?:㎡|平米|m²)/i,
+  /(\d+(?:\.\d+)?)\s*平米以上/,
+];
+function extractSqm(text) {
+  if (!text) return null;
+  for (const p of SQM_PATTERNS) {
+    const m = text.match(p);
+    if (m) { const v = parseFloat(m[1]); if (v >= 6 && v <= 600) return v; }
+  }
+  return null;
+}
+
+// ─── 食事区分の表示 ───────────────────────────────
+const MEAL_LABELS = { '0': '素泊まり', '1': '朝食付き', '2': '朝夕食付き', '3': '夕食付き', '4': 'その他食事付き' };
+const MEAL_CLASS  = { '0': 'meal-0',   '1': 'meal-1',   '2': 'meal-2',     '3': 'meal-3',   '4': 'meal-1' };
+
+// ─── サンプルデータ（バックエンド未接続時のフォールバック） ───
+const SAMPLE = [
+  { hotelNo:'h001', hotelName:'ザ・プレミアムホテル東京',  address:'東京都千代田区丸の内1-1-1', reviewAverage:4.7, reviewCount:342,
+    planId:'p001', planName:'スーペリアダブル 35㎡ 禁煙　朝食付き',      price:28000, mealType:'1' },
+  { hotelNo:'h001', hotelName:'ザ・プレミアムホテル東京',  address:'東京都千代田区丸の内1-1-1', reviewAverage:4.7, reviewCount:342,
+    planId:'p002', planName:'デラックスツイン（52平米）　素泊まり',       price:42000, mealType:'0' },
+  { hotelNo:'h002', hotelName:'アーバンリゾート品川',       address:'東京都港区高輪3-2-1',       reviewAverage:4.3, reviewCount:187,
+    planId:'p003', planName:'スタンダードツイン 24㎡　朝食付き',          price:18500, mealType:'1' },
+  { hotelNo:'h002', hotelName:'アーバンリゾート品川',       address:'東京都港区高輪3-2-1',       reviewAverage:4.3, reviewCount:187,
+    planId:'p004', planName:'スーペリアダブル 38㎡　朝食付き',            price:24000, mealType:'1' },
+  { hotelNo:'h003', hotelName:'コンフォートイン渋谷',       address:'東京都渋谷区道玄坂2-1-1',  reviewAverage:3.9, reviewCount:96,
+    planId:'p005', planName:'シングルルーム 18平米　素泊まり',            price:9800,  mealType:'0' },
+  { hotelNo:'h004', hotelName:'グランドパレス東京ベイ',     address:'東京都江東区青海1-3-1',     reviewAverage:4.8, reviewCount:510,
+    planId:'p006', planName:'ベイビューデラックス 65㎡　朝夕食付き',      price:68000, mealType:'2' },
+  { hotelNo:'h004', hotelName:'グランドパレス東京ベイ',     address:'東京都江東区青海1-3-1',     reviewAverage:4.8, reviewCount:510,
+    planId:'p007', planName:'スイートルーム 110㎡　素泊まり',             price:120000,mealType:'0' },
+  { hotelNo:'h005', hotelName:'ファミリーホテル上野',       address:'東京都台東区上野2-4-5',     reviewAverage:4.1, reviewCount:220,
+    planId:'p008', planName:'コネクティングルーム 45m²　朝食付き（子供無料）', price:32000, mealType:'1' },
+];
+
+// ─── UI 初期化 ─────────────────────────────────────
+(function init() {
+  const today = new Date();
+  const next  = new Date(today); next.setDate(today.getDate() + 7);
+  document.getElementById('checkin').value  = fmt(today);
+  document.getElementById('checkout').value = fmt(next);
+  updateSlider();
+  loadAreas();
+})();
+
+function fmt(d) { return d.toISOString().slice(0, 10); }
+
+// スライダーのグラデーションと1人あたり表示を更新
+function updateSlider() {
+  const sl     = document.getElementById('sqm-slider');
+  const minVal = parseInt(sl.min), maxVal = parseInt(sl.max);
+  const val    = parseInt(sl.value);
+  const pct    = ((val - minVal) / (maxVal - minVal) * 100).toFixed(1);
+  sl.style.setProperty('--pct', `${pct}%`);
+
+  document.getElementById('sqm-display').textContent = val;
+  const guests = parseInt(document.getElementById('guests').value) || 2;
+  document.getElementById('pp-preview').textContent =
+    `${guests}名で利用 → 1人あたり ${(val / guests).toFixed(1)}㎡`;
+}
+
+document.getElementById('sqm-slider').addEventListener('input', updateSlider);
+document.getElementById('guests').addEventListener('change', updateSlider);
+
+// エリアのサジェスト一覧を取得
+async function loadAreas() {
+  try {
+    const res = await fetch(`${API_BASE}/api/areas`, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) return;
+    const areas  = await res.json();
+    const dl     = document.getElementById('area-list');
+    areas.forEach(a => {
+      const opt = document.createElement('option');
+      opt.value = a.name;
+      dl.appendChild(opt);
+    });
+  } catch { /* バックエンド未接続時は無視 */ }
+}
+
+// ─── 検索 ─────────────────────────────────────────
+let currentResults = [];
+
+async function doSearch() {
+  const area     = document.getElementById('area').value.trim() || '東京';
+  const checkin  = document.getElementById('checkin').value;
+  const checkout = document.getElementById('checkout').value;
+  const guests   = parseInt(document.getElementById('guests').value) || 2;
+  const minSqm   = parseInt(document.getElementById('sqm-slider').value);
+
+  if (!checkin || !checkout) { alert('チェックイン・チェックアウト日を入力してください'); return; }
+  if (new Date(checkin) >= new Date(checkout)) { alert('チェックアウトはチェックインより後の日付を選択してください'); return; }
+
+  const btn = document.getElementById('search-btn');
+  btn.disabled = true; btn.textContent = '検索中...';
+
+  setResults('<div class="state-box"><div class="spinner"></div><div>検索中…</div></div>');
+
+  let results  = [];
+  let isLive   = false;
+  let errorMsg = null;
+
+  try {
+    const params = new URLSearchParams({ area, checkin, checkout, guests, minSqm, hits: 30 });
+    const res    = await fetch(`${API_BASE}/api/search?${params}`, { signal: AbortSignal.timeout(12000) });
+    const data   = await res.json();
+
+    if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+    results = data.results || [];
+    isLive  = true;
+    document.getElementById('setup-notice').style.display = 'none';
+
+  } catch (err) {
+    // バックエンド未接続 → サンプルデータで代替
+    document.getElementById('setup-notice').style.display = '';
+    if (err.name !== 'AbortError' && !err.message.includes('fetch')) {
+      errorMsg = err.message;
+    }
+    results = SAMPLE
+      .map(d => {
+        const sqm = extractSqm(d.planName);
+        if (!sqm || sqm < minSqm) return null;
+        return {
+          ...d,
+          sqm,
+          perPersonSqm:   parseFloat((sqm / guests).toFixed(1)),
+          pricePerPerson: Math.round(d.price / guests),
+          reserveUrl: `https://travel.rakuten.co.jp/HOTEL/${d.hotelNo}/plan.html`,
+        };
+      })
+      .filter(Boolean);
+  }
+
+  btn.disabled = false; btn.textContent = '🔍　この条件でホテルを検索する';
+
+  currentResults = results;
+  const sortVal = document.querySelector('.sort-select')?.value || '-sqm';
+  renderResults(results, minSqm, isLive, errorMsg, sortVal, guests);
+}
+
+function renderResults(results, minSqm, isLive, errorMsg, sortVal, guests) {
+  if (!guests) guests = parseInt(document.getElementById('guests').value) || 2;
+
+  // ソート
+  const sortFns = {
+    '-sqm':    (a,b) => b.sqm - a.sqm,
+    '+sqm':    (a,b) => a.sqm - b.sqm,
+    '-price':  (a,b) => a.price - b.price,
+    '+review': (a,b) => (b.reviewAverage||0) - (a.reviewAverage||0),
+  };
+  const sorted = [...results].sort(sortFns[sortVal] || sortFns['-sqm']);
+
+  if (sorted.length === 0) {
+    setResults(`<div class="state-box">
+      <div class="state-icon">🔍</div>
+      <div>${minSqm}㎡以上の客室が見つかりませんでした</div>
+      <div class="state-sub">スライダーを左に動かすか、エリア・日程を変えてお試しください</div>
+    </div>`);
+    return;
+  }
+
+  const badge = isLive
+    ? '<span class="src-badge src-live">楽天トラベル リアルデータ</span>'
+    : '<span class="src-badge src-sample">サンプルデータ</span>';
+
+  let html = `
+    <div class="results-header">
+      <div class="results-count">
+        <strong>${sorted.length}件</strong>のプランが見つかりました（${minSqm}㎡以上）${badge}
+      </div>
+      <select class="sort-select" onchange="applySort(this.value)">
+        <option value="-sqm"   ${sortVal==='-sqm'   ?'selected':''}>広い順</option>
+        <option value="+sqm"   ${sortVal==='+sqm'   ?'selected':''}>コンパクト順</option>
+        <option value="-price" ${sortVal==='-price'  ?'selected':''}>料金が安い順</option>
+        <option value="+review"${sortVal==='+review' ?'selected':''}>評価が高い順</option>
+      </select>
+    </div>`;
+
+  sorted.forEach(item => {
+    const mealLabel = MEAL_LABELS[String(item.mealType)] || '';
+    const mealClass = MEAL_CLASS[String(item.mealType)] || 'meal-0';
+    html += `
+    <div class="hotel-card"
+         data-sqm="${item.sqm}"
+         data-price="${item.price}"
+         data-review="${item.reviewAverage||0}">
+      <div class="card-top">
+        <div class="hotel-info">
+          <div class="hotel-name">${esc(item.hotelName)}</div>
+          <div class="hotel-sub">
+            <span class="hotel-area">📍 ${esc(item.address || '')}</span>
+            ${item.reviewAverage ? `
+            <span class="hotel-review">
+              <span class="star">★</span>
+              ${item.reviewAverage}
+              <span>(${(item.reviewCount||0).toLocaleString()}件)</span>
+            </span>` : ''}
+          </div>
+          ${item.nearestStation ? `<div style="font-size:11px;color:var(--text-hint)">🚉 ${esc(item.nearestStation)}</div>` : ''}
+        </div>
+        <div class="sqm-callout">
+          <div class="sqm-big">${item.sqm}<span class="sqm-big-unit">㎡</span></div>
+          <div class="pp-badge">👤 1人 ${item.perPersonSqm}㎡</div>
+        </div>
+      </div>
+
+      ${mealLabel ? `<span class="meal-badge ${mealClass}">${mealLabel}</span>` : ''}
+      <div class="plan-name">${esc(item.planName)}</div>
+
+      <div class="tags">
+        <span class="tag">📐 ${item.sqm}㎡</span>
+        <span class="tag">👥 1人あたり ${item.perPersonSqm}㎡</span>
+        ${item.roomName ? `<span class="tag">🛏 ${esc(item.roomName)}</span>` : ''}
+      </div>
+
+      <div class="card-footer">
+        <div class="price-block">
+          <span class="price-label">1泊・1室（税込）</span>
+          <span class="price-val">¥${Number(item.price).toLocaleString()}<span class="price-suffix"> 〜</span></span>
+          <span class="price-per">1人あたり ¥${Number(item.pricePerPerson).toLocaleString()}〜</span>
+        </div>
+        <a class="reserve-btn" href="${esc(item.reserveUrl)}" target="_blank" rel="noopener noreferrer">
+          予約する →
+        </a>
+      </div>
+    </div>`;
+  });
+
+  setResults(html);
+}
+
+function applySort(val) {
+  const guests = parseInt(document.getElementById('guests').value) || 2;
+  renderResults(currentResults,
+    parseInt(document.getElementById('sqm-slider').value),
+    /* isLive = */ document.getElementById('setup-notice').style.display === 'none',
+    null, val, guests);
+}
+
+function setResults(html) { document.getElementById('results').innerHTML = html; }
+
+function esc(str) {
+  return String(str||'')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
