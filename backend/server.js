@@ -157,7 +157,6 @@ app.get('/api/search', async (req, res) => {
     const apiData = await callRakutenTravel('VacantHotelSearch/20170426', {
       largeClassCode:  'japan',
       middleClassCode: prefCode,
-      smallClassCode:  prefCode,
       checkinDate:     checkin.replace(/-/g, ''),
       checkoutDate:    checkout.replace(/-/g, ''),
       adultNum:        guestsNum,
