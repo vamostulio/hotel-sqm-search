@@ -94,11 +94,11 @@ function parseRakutenResponse(apiData, { minSqm, guests, checkin, checkout }) {
   for (const hotelWrapper of hotels) {
     const hotelArr       = hotelWrapper.hotel || [];
     const hotelBasicInfo = hotelArr[0]?.hotelBasicInfo || {};
-    const roomInfoArr    = hotelArr[1]?.roomInfo       || [];
+    const roomInfoArr   = hotelArr[1]?.roomInfo         || [];
 
     for (const roomWrapper of roomInfoArr) {
-      const roomBasicInfo = roomWrapper.roomBasicInfo || {};
-      const dailyCharges  = roomWrapper.dailyCharge   || [];
+      const roomBasicInfo = roomInfoArr[0]?.roomBasicInfo  || {};
+      const dailyCharge   = roomInfoArr[1]?.dailyCharge    || {};
 
       for (const charge of dailyCharges) {
         const sqm = extractSqmFromRakutenResponse(
