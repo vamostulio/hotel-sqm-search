@@ -170,6 +170,7 @@ app.get('/api/search', async (req, res) => {
       return res.status(502).json({ error: `楽天APIエラー: ${apiData.error}`, description: apiData.error_description });
     }
 
+  console.log('RAW API:', JSON.stringify(apiData.hotels?.[0]));
     let results = parseRakutenResponse(apiData, { minSqm: minSqmNum, guests: guestsNum, checkin, checkout });
 
     const sortFn = {
