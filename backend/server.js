@@ -76,8 +76,8 @@ function buildReserveUrl(hotelNo, planId, checkin, checkout, guests) {
   const params = new URLSearchParams({
     f_no:       hotelNo,
     f_planid:   planId,
-    f_hi1:      checkin.replace(/-/g, ''),
-    f_hi2:      checkout.replace(/-/g, ''),
+    f_hi1:      checkin,
+    f_hi2:      checkout,
     f_adult_su: guests,
   });
   if (RAKUTEN_AFFILIATE_ID) {
