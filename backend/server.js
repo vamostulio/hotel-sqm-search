@@ -208,6 +208,8 @@ app.get('/api/search', async (req, res) => {
       page:            parseInt(page) || 1,
     });
 
+    console.log('rakuten response:', JSON.stringify(apiData).slice(0, 500));
+
     if (apiData.error) {
       return res.status(502).json({ error: `楽天APIエラー: ${apiData.error}`, description: apiData.error_description });
     }
