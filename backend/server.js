@@ -189,7 +189,7 @@ app.get('/api/search', async (req, res) => {
   if (new Date(checkin) >= new Date(checkout)) return res.status(400).json({ error: 'checkout は checkin より後の日付を指定してください' });
 
   const guestsNum = Math.min(Math.max(parseInt(guests) || 2, 1), 9);
-  const minSqmNum = Math.max(parseFloat(minSqm) || 20, 0);
+  const minSqmNum = parseFloat(minSqm) || 0;
   const prefCode  = getPrefCode(area);
 
   try {
