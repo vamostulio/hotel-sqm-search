@@ -101,6 +101,10 @@ function parseRakutenResponse(apiData, { minSqm, guests, checkin, checkout }) {
     const hotelBasicInfo = hotelArr[0]?.hotelBasicInfo || {};
     const roomInfoArr    = hotelArr[1]?.roomInfo       || [];
 
+      console.log('hotelArr type:', typeof hotelArr, Array.isArray(hotelArr));
+      console.log('hotelArr length:', hotelArr.length);
+      console.log('hotelArr[1]:', JSON.stringify(hotelArr[1]));
+
     // roomInfoArr[0] = roomBasicInfo, roomInfoArr[1] = dailyCharge
     const roomBasicInfo = roomInfoArr[0]?.roomBasicInfo || {};
     const dailyCharge   = roomInfoArr[1]?.dailyCharge   || {};
