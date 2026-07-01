@@ -136,7 +136,7 @@ function parseRakutenResponse(apiData, { minSqm, guests, checkin, checkout }) {
     if (hotels.length > 0) console.log('first hotel keys:', JSON.stringify(Object.keys(hotels[0])));
   
   for (const hotelWrapper of hotels) {
-    const hotelArr       = hotelWrapper.hotel || hotelWrapper[0]?.hotel || [];
+    const hotelArr       = Array.isArray(hotelWrapper) ? hotelWrapper : (hotelWrapper.hotel || []);
     const hotelBasicInfo = hotelArr[0]?.hotelBasicInfo || {};
     const roomInfoArr    = hotelArr[1]?.roomInfo       || [];
 
