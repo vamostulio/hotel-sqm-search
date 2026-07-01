@@ -105,8 +105,8 @@ function parseRakutenResponse(apiData, { minSqm, guests, checkin, checkout }) {
       
       for (const charge of dailyCharges) {
         const sqm = extractSqmFromRakutenResponse(
-          { planName: charge.planName, planContents: charge.planContents },
-          { roomName: roomBasicInfo.roomName, roomContents: roomBasicInfo.roomContents },
+          { planName: roomBasicInfo.roomName, planContents: roomBasicInfo.planName },
+          { roomName: roomBasicInfo.roomName },
           { hotelSpecial: hotelBasicInfo.hotelSpecial }
         );
 
