@@ -11,6 +11,7 @@ const cors      = require('cors');
 const axios     = require('axios');
 const rateLimit = require('express-rate-limit');
 const { extractSqmFromRakutenResponse } = require('./sqmExtractor');
+const AREA_DATA = require('./areaData');
 
 const app  = express();
 const PORT = process.env.PORT || 3001;
@@ -132,11 +133,8 @@ function parseRakutenResponse(apiData, { minSqm, guests, checkin, checkout }) {
   const results = [];
   const hotels  = apiData.hotels || [];
 
-    console.log('hotels length:', hotels.length);
-    if (hotels.length > 0) console.log('first hotel keys:', JSON.stringify(Object.keys(hotels[0])));
-  
   for (const hotelWrapper of hotels) {
-    const hotelArr       = Array.isArray(hotelWrapper) ? hotelWrapper : (hotelWrapper.hotel || []);
+    const hotelArr       = hotelWrapper.hotel || [];
     const hotelBasicInfo = hotelArr[0]?.hotelBasicInfo || {};
     const roomInfoArr    = hotelArr[1]?.roomInfo       || [];
 
@@ -191,14 +189,15 @@ app.get('/api/search', async (req, res) => {
   if (new Date(checkin) >= new Date(checkout)) return res.status(400).json({ error: 'checkout は checkin より後の日付を指定してください' });
 
   const guestsNum = Math.min(Math.max(parseInt(guests) || 2, 1), 9);
-  const minSqmNum = parseFloat(minSqm) || 0;
+  const minSqmNum = Math.max(parseFloat(minSqm) || 20, 0);
   const prefCode  = getPrefCode(area);
 
   try {
     const apiData = await callRakutenTravel('VacantHotelSearch/20170426', {
       largeClassCode:  'japan',
-      middleClassCode: prefCode.middle,
-      smallClassCode:  prefCode.small,
+      middleClassCode: req.query.middle || 'tokyo',
+      smallClassCode:  req.query.small  || 'tokyo',
+      ...(req.query.detail ? { detailClassCode: req.query.detail } : {}),
       checkinDate:     checkin,
       checkoutDate:    checkout,
       adultNum:        guestsNum,
@@ -230,7 +229,7 @@ app.get('/api/search', async (req, res) => {
 });
 
 app.get('/api/areas', (_req, res) => {
-  res.json(Object.keys(PREF_MAP).map(name => ({ name, code: PREF_MAP[name] })));
+  res.json(AREA_DATA);
 });
 
 app.get('/health', (_req, res) => {
