@@ -179,6 +179,9 @@ function parseRakutenResponse(apiData, { minSqm, guests, checkin, checkout }) {
 // ══════════════════════════════════════════════════════════════════
 
 app.get('/api/search', async (req, res) => {
+
+  console.log('search called', req.query);
+  
   if (!RAKUTEN_APP_ID || !RAKUTEN_ACCESS_KEY) {
     return res.status(500).json({ error: 'RAKUTEN_APP_ID または RAKUTEN_ACCESS_KEY が未設定です。' });
   }
