@@ -76,8 +76,8 @@ function buildReserveUrl(hotelNo, planId, checkin, checkout, guests) {
   const params = new URLSearchParams({
     f_no:       hotelNo,
     f_planid:   planId,
-    f_hi1:      checkin,
-    f_hi2:      checkout,
+    f_hi1:      checkin.replace(/-/g, ''),
+    f_hi2:      checkout.replace(/-/g, ''),
     f_adult_su: guests,
   });
   if (RAKUTEN_AFFILIATE_ID) {
@@ -87,57 +87,52 @@ function buildReserveUrl(hotelNo, planId, checkin, checkout, guests) {
 }
 
 // ── 楽天APIレスポンスのパース ────────────────────────────────────
+// 実際のレスポンス構造:
+// hotel[1].roomInfo = [
+//   { roomBasicInfo: { roomClass, roomName, planId, planName, reserveUrl, ... } },
+//   { dailyCharge: { stayDate, rakutenCharge, total, chargeFlag } }
+// ]
 function parseRakutenResponse(apiData, { minSqm, guests, checkin, checkout }) {
   const results = [];
   const hotels  = apiData.hotels || [];
 
-  console.log('hotels count:', hotels.length);
-  console.log('hotel[0] keys:', Object.keys(hotelWrapper.hotel || {}));
-  
   for (const hotelWrapper of hotels) {
     const hotelArr       = hotelWrapper.hotel || [];
     const hotelBasicInfo = hotelArr[0]?.hotelBasicInfo || {};
-    const roomInfoArr    = hotelArr[1]?.roomInfo        || [];
+    const roomInfoArr    = hotelArr[1]?.roomInfo       || [];
 
-    for (const roomWrapper of roomInfoArr) {
-      const roomBasicInfo  = roomInfoArr[0]?.roomBasicInfo || {};
-      const dailyCharge    = roomInfoArr[1]?.dailyCharge   || {};
+    // roomInfoArr[0] = roomBasicInfo, roomInfoArr[1] = dailyCharge
+    const roomBasicInfo = roomInfoArr[0]?.roomBasicInfo || {};
+    const dailyCharge   = roomInfoArr[1]?.dailyCharge   || {};
 
-      console.log('roomBasicInfo:', JSON.stringify(roomBasicInfo));
-      console.log('dailyCharge:', JSON.stringify(dailyCharge));
-      console.log('sqm result:', sqm, 'from:', roomBasicInfo.roomName);
-      
-      for (const charge of dailyCharges) {
-        const sqm = extractSqmFromRakutenResponse(
-          { planName: roomBasicInfo.roomName, planContents: roomBasicInfo.planName },
-          { roomName: roomBasicInfo.roomName },
-          { hotelSpecial: hotelBasicInfo.hotelSpecial }
-        );
+    const sqm = extractSqmFromRakutenResponse(
+      { planName: roomBasicInfo.planName, planContents: roomBasicInfo.roomName },
+      { roomName: roomBasicInfo.roomName },
+      { hotelSpecial: hotelBasicInfo.hotelSpecial }
+    );
 
-        if (sqm === null || sqm < minSqm) continue;
+    if (sqm === null || sqm < minSqm) continue;
 
-        const price = charge.total ?? charge.rakutenCharge ?? 0;
+    const price = dailyCharge.total ?? dailyCharge.rakutenCharge ?? 0;
 
-        results.push({
-          hotelNo:        hotelBasicInfo.hotelNo,
-          hotelName:      hotelBasicInfo.hotelName,
-          address:        `${hotelBasicInfo.address1 || ''}${hotelBasicInfo.address2 || ''}`,
-          nearestStation: hotelBasicInfo.nearestStation,
-          hotelImageUrl:  hotelBasicInfo.hotelImageUrl,
-          reviewAverage:  hotelBasicInfo.reviewAverage,
-          reviewCount:    hotelBasicInfo.reviewCount,
-          planId:         charge.planId,
-          planName:       charge.planName,
-          roomName:       roomBasicInfo.roomName,
-          mealType:       charge.mealFlag,
-          price,
-          pricePerPerson: Math.round(price / guests),
-          sqm,
-          perPersonSqm:   parseFloat((sqm / guests).toFixed(1)),
-          reserveUrl:     buildReserveUrl(hotelBasicInfo.hotelNo, charge.planId, checkin, checkout, guests),
-        });
-      }
-    }
+    results.push({
+      hotelNo:        hotelBasicInfo.hotelNo,
+      hotelName:      hotelBasicInfo.hotelName,
+      address:        `${hotelBasicInfo.address1 || ''}${hotelBasicInfo.address2 || ''}`,
+      nearestStation: hotelBasicInfo.nearestStation,
+      hotelImageUrl:  hotelBasicInfo.hotelImageUrl,
+      reviewAverage:  hotelBasicInfo.reviewAverage,
+      reviewCount:    hotelBasicInfo.reviewCount,
+      planId:         roomBasicInfo.planId,
+      planName:       roomBasicInfo.planName,
+      roomName:       roomBasicInfo.roomName,
+      mealType:       roomBasicInfo.withBreakfastFlag,
+      price,
+      pricePerPerson: Math.round(price / guests),
+      sqm,
+      perPersonSqm:   parseFloat((sqm / guests).toFixed(1)),
+      reserveUrl:     roomBasicInfo.reserveUrl || buildReserveUrl(hotelBasicInfo.hotelNo, roomBasicInfo.planId, checkin, checkout, guests),
+    });
   }
   return results;
 }
@@ -157,7 +152,7 @@ app.get('/api/search', async (req, res) => {
   if (new Date(checkin) >= new Date(checkout)) return res.status(400).json({ error: 'checkout は checkin より後の日付を指定してください' });
 
   const guestsNum = Math.min(Math.max(parseInt(guests) || 2, 1), 9);
-  const minSqmNum = parseFloat(minSqm) || 0;
+  const minSqmNum = Math.max(parseFloat(minSqm) || 20, 0);
   const prefCode  = getPrefCode(area);
 
   try {
@@ -177,9 +172,6 @@ app.get('/api/search', async (req, res) => {
       return res.status(502).json({ error: `楽天APIエラー: ${apiData.error}`, description: apiData.error_description });
     }
 
-  console.log('RAW API hotels length:', apiData.hotels?.length);
-  console.log('RAW API first hotel:', JSON.stringify(apiData.hotels?.[0]?.hotel));
-    
     let results = parseRakutenResponse(apiData, { minSqm: minSqmNum, guests: guestsNum, checkin, checkout });
 
     const sortFn = {
