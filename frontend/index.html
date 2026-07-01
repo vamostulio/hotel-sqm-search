@@ -71,10 +71,13 @@
     /* フォームグリッド */
     .form-grid {
       display: grid;
-      grid-template-columns: 2fr 1.4fr 1.4fr 1fr;
+      grid-template-columns: 1.2fr 1.2fr 1.2fr 1fr 1fr 0.8fr;
       gap: 10px; margin-bottom: 14px;
     }
-    @media (max-width: 680px) {
+    @media (max-width: 900px) {
+      .form-grid { grid-template-columns: 1fr 1fr 1fr; }
+    }
+    @media (max-width: 600px) {
       .form-grid { grid-template-columns: 1fr 1fr; }
     }
     .form-group { display: flex; flex-direction: column; gap: 4px; }
@@ -308,55 +311,21 @@
 
     <div class="form-grid">
       <div class="form-group">
-        <label for="area">都道府県</label>
-        <select id="area">
-          <option value="北海道">北海道</option>
-          <option value="青森">青森県</option>
-          <option value="岩手">岩手県</option>
-          <option value="宮城">宮城県</option>
-          <option value="秋田">秋田県</option>
-          <option value="山形">山形県</option>
-          <option value="福島">福島県</option>
-          <option value="茨城">茨城県</option>
-          <option value="栃木">栃木県</option>
-          <option value="群馬">群馬県</option>
-          <option value="埼玉">埼玉県</option>
-          <option value="千葉">千葉県</option>
-          <option value="東京" selected>東京都</option>
-          <option value="神奈川">神奈川県</option>
-          <option value="新潟">新潟県</option>
-          <option value="富山">富山県</option>
-          <option value="石川">石川県</option>
-          <option value="福井">福井県</option>
-          <option value="山梨">山梨県</option>
-          <option value="長野">長野県</option>
-          <option value="岐阜">岐阜県</option>
-          <option value="静岡">静岡県</option>
-          <option value="愛知">愛知県</option>
-          <option value="三重">三重県</option>
-          <option value="滋賀">滋賀県</option>
-          <option value="京都">京都府</option>
-          <option value="大阪">大阪府</option>
-          <option value="兵庫">兵庫県</option>
-          <option value="奈良">奈良県</option>
-          <option value="和歌山">和歌山県</option>
-          <option value="鳥取">鳥取県</option>
-          <option value="島根">島根県</option>
-          <option value="岡山">岡山県</option>
-          <option value="広島">広島県</option>
-          <option value="山口">山口県</option>
-          <option value="徳島">徳島県</option>
-          <option value="香川">香川県</option>
-          <option value="愛媛">愛媛県</option>
-          <option value="高知">高知県</option>
-          <option value="福岡">福岡県</option>
-          <option value="佐賀">佐賀県</option>
-          <option value="長崎">長崎県</option>
-          <option value="熊本">熊本県</option>
-          <option value="大分">大分県</option>
-          <option value="宮崎">宮崎県</option>
-          <option value="鹿児島">鹿児島県</option>
-          <option value="沖縄">沖縄県</option>
+        <label for="pref">都道府県</label>
+        <select id="pref" onchange="onPrefChange()">
+          <option value="">選択してください</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="small">エリア</label>
+        <select id="small" onchange="onSmallChange()">
+          <option value="">都道府県を選択</option>
+        </select>
+      </div>
+      <div class="form-group" id="detail-group" style="display:none">
+        <label for="detail">小エリア</label>
+        <select id="detail">
+          <option value="">エリアを選択</option>
         </select>
       </div>
       <div class="form-group">
@@ -465,14 +434,82 @@ const SAMPLE = [
     planId:'p008', planName:'コネクティングルーム 45m²　朝食付き（子供無料）', price:32000, mealType:'1' },
 ];
 
+// ─── エリアデータ ──────────────────────────────────────
+let AREA_DATA = {};
+
 // ─── UI 初期化 ─────────────────────────────────────
-(function init() {
+(async function init() {
   const today = new Date();
   const next  = new Date(today); next.setDate(today.getDate() + 7);
   document.getElementById('checkin').value  = fmt(today);
   document.getElementById('checkout').value = fmt(next);
   updateSlider();
+  await loadAreas();
 })();
+
+async function loadAreas() {
+  try {
+    const res = await fetch(`${API_BASE}/api/areas`, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return;
+    AREA_DATA = await res.json();
+    const prefSel = document.getElementById('pref');
+    prefSel.innerHTML = '<option value="">都道府県を選択</option>';
+    for (const [code, pref] of Object.entries(AREA_DATA)) {
+      const opt = document.createElement('option');
+      opt.value = code;
+      opt.textContent = pref.name;
+      if (code === 'tokyo') opt.selected = true;
+      prefSel.appendChild(opt);
+    }
+    onPrefChange();
+  } catch {
+    document.getElementById('pref').innerHTML = '<option value="tokyo">東京都</option>';
+    document.getElementById('small').innerHTML = '<option value="tokyo">東京２３区内</option>';
+  }
+}
+
+function onPrefChange() {
+  const prefCode = document.getElementById('pref').value;
+  const smallSel = document.getElementById('small');
+  const detailGroup = document.getElementById('detail-group');
+  smallSel.innerHTML = '<option value="">エリアを選択</option>';
+  detailGroup.style.display = 'none';
+  if (!prefCode || !AREA_DATA[prefCode]) return;
+  const smalls = AREA_DATA[prefCode].smalls;
+  let first = true;
+  for (const [code, small] of Object.entries(smalls)) {
+    const opt = document.createElement('option');
+    opt.value = code;
+    opt.textContent = small.name;
+    if (first) { opt.selected = true; first = false; }
+    smallSel.appendChild(opt);
+  }
+  onSmallChange();
+}
+
+function onSmallChange() {
+  const prefCode  = document.getElementById('pref').value;
+  const smallCode = document.getElementById('small').value;
+  const detailSel = document.getElementById('detail');
+  const detailGroup = document.getElementById('detail-group');
+  if (!prefCode || !smallCode || !AREA_DATA[prefCode]) return;
+  const small = AREA_DATA[prefCode].smalls[smallCode];
+  if (small && small.details) {
+    detailGroup.style.display = '';
+    detailSel.innerHTML = '';
+    let first = true;
+    for (const [code, name] of Object.entries(small.details)) {
+      const opt = document.createElement('option');
+      opt.value = code;
+      opt.textContent = name;
+      if (first) { opt.selected = true; first = false; }
+      detailSel.appendChild(opt);
+    }
+  } else {
+    detailGroup.style.display = 'none';
+    detailSel.innerHTML = '';
+  }
+}
 
 function fmt(d) { return d.toISOString().slice(0, 10); }
 
@@ -512,7 +549,10 @@ async function loadAreas() {
 let currentResults = [];
 
 async function doSearch() {
-  const area     = document.getElementById('area').value.trim() || '東京';
+  const prefCode  = document.getElementById('pref').value || 'tokyo';
+  const smallCode = document.getElementById('small').value || 'tokyo';
+  const detailCode = document.getElementById('detail')?.value || '';
+  const area = prefCode;
   const checkin  = document.getElementById('checkin').value;
   const checkout = document.getElementById('checkout').value;
   const guests   = parseInt(document.getElementById('guests').value) || 2;
@@ -531,7 +571,7 @@ async function doSearch() {
   let errorMsg = null;
 
   try {
-    const params = new URLSearchParams({ area, checkin, checkout, guests, minSqm, hits: 30 });
+    const params = new URLSearchParams({ area, checkin, checkout, guests, minSqm, hits: 30, middle: prefCode, small: smallCode, ...(detailCode ? { detail: detailCode } : {}) });
     const res    = await fetch(`${API_BASE}/api/search?${params}`, { signal: AbortSignal.timeout(12000) });
     const data   = await res.json();
 
