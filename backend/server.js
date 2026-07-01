@@ -102,6 +102,7 @@ function parseRakutenResponse(apiData, { minSqm, guests, checkin, checkout }) {
 
       console.log('roomBasicInfo:', JSON.stringify(roomBasicInfo));
       console.log('dailyCharge:', JSON.stringify(dailyCharge));
+      console.log('sqm result:', sqm, 'from:', roomBasicInfo.roomName);
       
       for (const charge of dailyCharges) {
         const sqm = extractSqmFromRakutenResponse(
