@@ -440,7 +440,7 @@ let AREA_DATA = {};
 // ─── UI 初期化 ─────────────────────────────────────
 (async function init() {
   const today = new Date();
-  const next  = new Date(today); next.setDate(today.getDate() + 7);
+  const next  = new Date(today); next.setDate(today.getDate() + 1);
   document.getElementById('checkin').value  = fmt(today);
   document.getElementById('checkout').value = fmt(next);
   updateSlider();
