@@ -28,26 +28,62 @@ app.use(rateLimit({
 }));
 
 // ── 都道府県コード（楽天API用・英語名） ──────────────────────────
+// 都道府県ごとの middleClassCode + smallClassCode + detailClassCode の対応表
 const PREF_MAP = {
-  '北海道': 'hokkaido', '青森': 'aomori',   '岩手': 'iwate',     '宮城': 'miyagi',
-  '秋田':   'akita',    '山形': 'yamagata', '福島': 'fukushima', '茨城': 'ibaraki',
-  '栃木':   'tochigi',  '群馬': 'gunma',    '埼玉': 'saitama',   '千葉': 'chiba',
-  '東京':   'tokyo',    '神奈川':'kanagawa', '新潟': 'niigata',   '富山': 'toyama',
-  '石川':   'ishikawa', '福井': 'fukui',    '山梨': 'yamanashi', '長野': 'nagano',
-  '岐阜':   'gifu',     '静岡': 'shizuoka', '愛知': 'aichi',     '三重': 'mie',
-  '滋賀':   'shiga',    '京都': 'kyoto',    '大阪': 'osaka',     '兵庫': 'hyogo',
-  '奈良':   'nara',     '和歌山':'wakayama', '鳥取': 'tottori',   '島根': 'shimane',
-  '岡山':   'okayama',  '広島': 'hiroshima','山口': 'yamaguchi', '徳島': 'tokushima',
-  '香川':   'kagawa',   '愛媛': 'ehime',    '高知': 'kochi',     '福岡': 'fukuoka',
-  '佐賀':   'saga',     '長崎': 'nagasaki', '熊本': 'kumamoto',  '大分': 'oita',
-  '宮崎':   'miyazaki', '鹿児島':'kagoshima','沖縄': 'okinawa',
+  '北海道': { middle: 'hokkaido',   small: 'sapporo',    detail: 'A' },
+  '青森':   { middle: 'aomori',     small: 'aomori',     detail: 'A' },
+  '岩手':   { middle: 'iwate',      small: 'morioka',    detail: 'A' },
+  '宮城':   { middle: 'miyagi',     small: 'sendai',     detail: 'A' },
+  '秋田':   { middle: 'akita',      small: 'akita',      detail: 'A' },
+  '山形':   { middle: 'yamagata',   small: 'yamagata',   detail: 'A' },
+  '福島':   { middle: 'fukushima',  small: 'koriyama',   detail: 'A' },
+  '茨城':   { middle: 'ibaraki',    small: 'mito',       detail: 'A' },
+  '栃木':   { middle: 'tochigi',    small: 'utsunomiya', detail: 'A' },
+  '群馬':   { middle: 'gunma',      small: 'maebashi',   detail: 'A' },
+  '埼玉':   { middle: 'saitama',    small: 'saitama',    detail: 'A' },
+  '千葉':   { middle: 'chiba',      small: 'chiba',      detail: 'A' },
+  '東京':   { middle: 'tokyo',      small: 'tokyo',      detail: 'A' },
+  '神奈川': { middle: 'kanagawa',   small: 'yokohama',   detail: 'A' },
+  '新潟':   { middle: 'niigata',    small: 'niigata',    detail: 'A' },
+  '富山':   { middle: 'toyama',     small: 'toyama',     detail: 'A' },
+  '石川':   { middle: 'ishikawa',   small: 'kanazawa',   detail: 'A' },
+  '福井':   { middle: 'fukui',      small: 'fukui',      detail: 'A' },
+  '山梨':   { middle: 'yamanashi',  small: 'kofu',       detail: 'A' },
+  '長野':   { middle: 'nagano',     small: 'nagano',     detail: 'A' },
+  '岐阜':   { middle: 'gifu',       small: 'gifu',       detail: 'A' },
+  '静岡':   { middle: 'shizuoka',   small: 'shizuoka',   detail: 'A' },
+  '愛知':   { middle: 'aichi',      small: 'nagoya',     detail: 'A' },
+  '三重':   { middle: 'mie',        small: 'tsu',        detail: 'A' },
+  '滋賀':   { middle: 'shiga',      small: 'otsu',       detail: 'A' },
+  '京都':   { middle: 'kyoto',      small: 'shi',        detail: 'A' },
+  '大阪':   { middle: 'osaka',      small: 'osaka',      detail: 'A' },
+  '兵庫':   { middle: 'hyogo',      small: 'kobe',       detail: 'A' },
+  '奈良':   { middle: 'nara',       small: 'nara',       detail: 'A' },
+  '和歌山': { middle: 'wakayama',   small: 'wakayama',   detail: 'A' },
+  '鳥取':   { middle: 'tottori',    small: 'tottori',    detail: 'A' },
+  '島根':   { middle: 'shimane',    small: 'matsue',     detail: 'A' },
+  '岡山':   { middle: 'okayama',    small: 'okayama',    detail: 'A' },
+  '広島':   { middle: 'hiroshima',  small: 'hiroshima',  detail: 'A' },
+  '山口':   { middle: 'yamaguchi',  small: 'yamaguchi',  detail: 'A' },
+  '徳島':   { middle: 'tokushima',  small: 'tokushima',  detail: 'A' },
+  '香川':   { middle: 'kagawa',     small: 'takamatsu',  detail: 'A' },
+  '愛媛':   { middle: 'ehime',      small: 'matsuyama',  detail: 'A' },
+  '高知':   { middle: 'kochi',      small: 'kochi',      detail: 'A' },
+  '福岡':   { middle: 'fukuoka',    small: 'fukuoka',    detail: 'A' },
+  '佐賀':   { middle: 'saga',       small: 'saga',       detail: 'A' },
+  '長崎':   { middle: 'nagasaki',   small: 'nagasaki',   detail: 'A' },
+  '熊本':   { middle: 'kumamoto',   small: 'kumamoto',   detail: 'A' },
+  '大分':   { middle: 'oita',       small: 'oita',       detail: 'A' },
+  '宮崎':   { middle: 'miyazaki',   small: 'miyazaki',   detail: 'A' },
+  '鹿児島': { middle: 'kagoshima',  small: 'kagoshima',  detail: 'A' },
+  '沖縄':   { middle: 'okinawa',    small: 'nahashi',    detail: 'A' },
 };
 
 function getPrefCode(areaName) {
-  for (const [key, code] of Object.entries(PREF_MAP)) {
-    if (areaName.includes(key)) return code;
+  for (const [key, val] of Object.entries(PREF_MAP)) {
+    if (areaName.includes(key)) return val;
   }
-  return 'tokyo'; // デフォルト: 東京
+  return { middle: 'tokyo', small: 'tokyo', detail: 'A' };
 }
 
 // ── 楽天API呼び出し（2026年移行対応版） ──────────────────────────
@@ -158,7 +194,9 @@ app.get('/api/search', async (req, res) => {
   try {
     const apiData = await callRakutenTravel('VacantHotelSearch/20170426', {
       largeClassCode:  'japan',
-      middleClassCode: prefCode,
+      middleClassCode: prefCode.middle,
+      smallClassCode:  prefCode.small,
+      detailClassCode: prefCode.detail,
       checkinDate:     checkin,
       checkoutDate:    checkout,
       adultNum:        guestsNum,
