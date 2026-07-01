@@ -134,7 +134,7 @@ function parseRakutenResponse(apiData, { minSqm, guests, checkin, checkout }) {
   const hotels  = apiData.hotels || [];
 
   for (const hotelWrapper of hotels) {
-    const hotelArr       = hotelWrapper.hotel || [];
+    const hotelArr       = Array.isArray(hotelWrapper) ? hotelWrapper : (hotelWrapper.hotel || []);
     const hotelBasicInfo = hotelArr[0]?.hotelBasicInfo || {};
     const roomInfoArr    = hotelArr[1]?.roomInfo       || [];
 
