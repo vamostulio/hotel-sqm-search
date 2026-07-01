@@ -97,22 +97,17 @@ function parseRakutenResponse(apiData, { minSqm, guests, checkin, checkout }) {
   const hotels  = apiData.hotels || [];
 
   for (const hotelWrapper of hotels) {
-    const hotelArr       = hotelWrapper.hotel || hotelWrapper || [];
+    const hotelArr       = hotelWrapper.hotel || [];
     const hotelBasicInfo = hotelArr[0]?.hotelBasicInfo || {};
     const roomInfoArr    = hotelArr[1]?.roomInfo       || [];
-
-      console.log('hotelArr type:', typeof hotelArr, Array.isArray(hotelArr));
-      console.log('hotelArr length:', hotelArr.length);
-      console.log('hotelArr[1]:', JSON.stringify(hotelArr[1]));
 
     // roomInfoArr[0] = roomBasicInfo, roomInfoArr[1] = dailyCharge
     const roomBasicInfo = roomInfoArr[0]?.roomBasicInfo || {};
     const dailyCharge   = roomInfoArr[1]?.dailyCharge   || {};
 
-    console.log('checking roomName:', roomBasicInfo.roomName);
     const sqm = extractSqmFromRakutenResponse(
-      { planName: roomBasicInfo.planName, planContents: roomBasicInfo.planName },
-      { roomName: roomBasicInfo.roomName, roomContents: roomBasicInfo.roomName },
+      { planName: roomBasicInfo.planName, planContents: roomBasicInfo.roomName },
+      { roomName: roomBasicInfo.roomName },
       { hotelSpecial: hotelBasicInfo.hotelSpecial }
     );
 
@@ -157,15 +152,13 @@ app.get('/api/search', async (req, res) => {
   if (new Date(checkin) >= new Date(checkout)) return res.status(400).json({ error: 'checkout は checkin より後の日付を指定してください' });
 
   const guestsNum = Math.min(Math.max(parseInt(guests) || 2, 1), 9);
-  const minSqmNum = parseFloat(minSqm) || 0;
+  const minSqmNum = Math.max(parseFloat(minSqm) || 20, 0);
   const prefCode  = getPrefCode(area);
 
   try {
     const apiData = await callRakutenTravel('VacantHotelSearch/20170426', {
-      latitude:     35.6812,
-      longitude:    139.7671,
-      searchRadius: 3,
-      datumType:    1,
+      largeClassCode:  'japan',
+      middleClassCode: prefCode,
       checkinDate:     checkin,
       checkoutDate:    checkout,
       adultNum:        guestsNum,
