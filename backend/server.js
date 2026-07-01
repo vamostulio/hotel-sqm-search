@@ -199,7 +199,6 @@ app.get('/api/search', async (req, res) => {
       largeClassCode:  'japan',
       middleClassCode: prefCode.middle,
       smallClassCode:  prefCode.small,
-      detailClassCode: prefCode.detail,
       checkinDate:     checkin,
       checkoutDate:    checkout,
       adultNum:        guestsNum,
