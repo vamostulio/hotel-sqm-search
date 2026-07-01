@@ -533,16 +533,24 @@ document.getElementById('guests').addEventListener('change', updateSlider);
 // エリアのサジェスト一覧を取得
 async function loadAreas() {
   try {
-    const res = await fetch(`${API_BASE}/api/areas`, { signal: AbortSignal.timeout(3000) });
+    const res = await fetch(`${API_BASE}/api/areas`, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return;
-    const areas  = await res.json();
-    const dl     = document.getElementById('area-list');
-    areas.forEach(a => {
+    AREA_DATA = await res.json();
+    const prefSel = document.getElementById('pref');
+    prefSel.innerHTML = '<option value="">都道府県を選択</option>';
+    for (const [code, pref] of Object.entries(AREA_DATA)) {
       const opt = document.createElement('option');
-      opt.value = a.name;
-      dl.appendChild(opt);
-    });
-  } catch { /* バックエンド未接続時は無視 */ }
+      opt.value = code;
+      opt.textContent = pref.name;
+      if (code === 'tokyo') opt.selected = true;
+      prefSel.appendChild(opt);
+    }
+    onPrefChange();
+  } catch(e) {
+    console.error('loadAreas error:', e);
+    document.getElementById('pref').innerHTML = '<option value="tokyo">東京都</option>';
+    document.getElementById('small').innerHTML = '<option value="tokyo">東京２３区内</option>';
+  }
 }
 
 // ─── 検索 ─────────────────────────────────────────
